@@ -233,13 +233,16 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
     def predict_from_dataframe(self, features: pd.DataFrame):
         labels_predicted_proba = self.predict_proba_from_dataframe(features)
         labels_predicted = np.argmax(labels_predicted_proba, axis=1)
-        labels_original_predicted = [self.train_generator.class_indices[label] for label in labels_predicted]
+
+        label_dict = {v: k for k, v in self.train_generator.class_indices.items()}
+
+        labels_original_predicted = [label_dict[label] for label in labels_predicted]
         return labels_original_predicted
     
     def score_from_dataframe(self, features: pd.DataFrame, labels_true: pd.Series):
         labels_predicted = self.predict_from_dataframe(features)
-        labels_original_predicted = [self.train_generator.class_indices[label] for label in labels_predicted]
-        accuracy = np.mean(labels_original_predicted == labels_true) * 100
+        np.array_equal
+        accuracy = np.mean(labels_predicted == labels_true) * 100
         return accuracy
     
     def predict_proba_from_pil_image(self, image: pillow_images.Image) -> dict:
@@ -250,8 +253,9 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         image_array = np.array(test_image, dtype='float64') / 255.0
         image_array = np.expand_dims(image_array, axis=0)
         labels_predicted_proba = self.model.predict(image_array)
+        label_dict = {v: k for k, v in self.train_generator.class_indices.items()}
         predicted_labels_dict = {
-            self.train_generator.class_indices[i]: probability \
+            label_dict[i]: probability \
                 for i, probability in enumerate(labels_predicted_proba)
         }
         return predicted_labels_dict
