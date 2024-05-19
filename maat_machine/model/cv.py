@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras as ktf
+import keras
 from keras import models as mktf
 from keras import layers as lktf
 from keras import optimizers as oktf
@@ -70,7 +71,7 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         self.model = None
 
     def create_cnn_model(self):
-        model = ktf.Sequential()
+        model = keras.Sequential()
         model.add(lktf.Input(shape=self.input_shape, name='input'))
 
         for i, conv_layer_config in list(enumerate(self.conv_layer_array)):
@@ -219,6 +220,16 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         )
         return self.model.predict(test_generator)
     
+    def predict_from_dataframe(self, features: pd.DataFrame):
+        labels_predicted_proba = self.predict_proba_from_dataframe(features)
+        predicted_labels = np.argmax(labels_predicted_proba, axis=1)
+        return predicted_labels
+    
+    def score_from_dataframe(self, features: pd.DataFrame, labels_true: pd.Series):
+        labels_predicted = self.predict_from_dataframe(features)
+        accuracy = np.mean(labels_predicted == labels_true) * 100
+        return accuracy
+    
     def predict_proba_from_pil_image(self, image: pillow_images.Image):
         target_width = self.input_shape[1]
         target_height = self.input_shape[0]
@@ -226,7 +237,12 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         test_image = test_image.convert('RGB')
         image_array = np.array(test_image, dtype='float64') / 255.0
         image_array = np.expand_dims(image_array, axis=0)
-        return self.model.predict(image_array)    
+        return self.model.predict(image_array) 
+
+    def predict_from_pil_image(self, image: pillow_images.Image):
+        labels_predicted_proba = self.predict_proba_from_pil_image(image)
+        predicted_label = np.argmax(labels_predicted_proba, axis=1)
+        return predicted_label
 
     def save(self, directory_path: paths.Path):
         assert directory_path is not None
@@ -277,3 +293,11 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
 
         model = mktf.load_model(extaction_directory_path / archive_files['model'])
         model.load_weights(extaction_directory_path / archive_files['weights'])
+
+        with open(extaction_directory_path / archive_files['wrapper'], 'r') as f:
+            wrapper_dict = json.load(f)
+
+        wrapper = CNNCustomClassifier(**wrapper_dict)
+        wrapper.model = model
+        return wrapper
+
