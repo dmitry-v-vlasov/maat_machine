@@ -232,26 +232,33 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
     
     def predict_from_dataframe(self, features: pd.DataFrame):
         labels_predicted_proba = self.predict_proba_from_dataframe(features)
-        predicted_labels = np.argmax(labels_predicted_proba, axis=1)
-        return predicted_labels
+        labels_predicted = np.argmax(labels_predicted_proba, axis=1)
+        labels_original_predicted = [self.train_generator.class_indices[label] for label in labels_predicted]
+        return labels_original_predicted
     
     def score_from_dataframe(self, features: pd.DataFrame, labels_true: pd.Series):
         labels_predicted = self.predict_from_dataframe(features)
-        accuracy = np.mean(labels_predicted == labels_true) * 100
+        labels_original_predicted = [self.train_generator.class_indices[label] for label in labels_predicted]
+        accuracy = np.mean(labels_original_predicted == labels_true) * 100
         return accuracy
     
-    def predict_proba_from_pil_image(self, image: pillow_images.Image):
+    def predict_proba_from_pil_image(self, image: pillow_images.Image) -> dict:
         target_width = self.input_shape[1]
         target_height = self.input_shape[0]
         test_image = image.resize((target_width, target_height))
         test_image = test_image.convert('RGB')
         image_array = np.array(test_image, dtype='float64') / 255.0
         image_array = np.expand_dims(image_array, axis=0)
-        return self.model.predict(image_array)
+        labels_predicted_proba = self.model.predict(image_array)
+        predicted_labels_dict = {
+            self.train_generator.class_indices[i]: probability \
+                for i, probability in enumerate(labels_predicted_proba)
+        }
+        return predicted_labels_dict
 
     def predict_from_pil_image(self, image: pillow_images.Image):
         labels_predicted_proba = self.predict_proba_from_pil_image(image)
-        predicted_label = np.argmax(labels_predicted_proba, axis=1)
+        predicted_label = max(labels_predicted_proba, key=labels_predicted_proba.get)
         return predicted_label
 
     def save(self, directory_path: paths.Path):

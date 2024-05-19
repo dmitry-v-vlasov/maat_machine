@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "maat-machine"
-version = "0.1.1b2"
+version = "0.1.1b3"
 description = "Yet another package designed to simplify coding for data science and machine learning"
 authors = ["Dmitry Vlasov <dmitry.v.vlasov@gmail.com>"]
 license = "MIT"
