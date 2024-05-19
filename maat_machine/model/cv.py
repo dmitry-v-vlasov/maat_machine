@@ -69,6 +69,10 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         self.dense_dropout = dense_dropout
 
         self.model = None
+        self.image_data_generator = None
+        self.train_generator = None
+        self.validation_generator = None
+        self.test_generator = None
 
     def create_cnn_model(self):
         model = keras.Sequential()
@@ -171,6 +175,8 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
             rescale=1.0/255,
             validation_split=self.validation_split
         )
+        self.image_data_generator = image_data_generator
+
         train_generator = image_data_generator.flow_from_dataframe(
             dataframe=data_frame,
             x_col=self.file_path_column_name,
@@ -183,6 +189,8 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
             suffle=True,
             subset='training'
         )
+        self.train_generator = train_generator
+
         validation_generator = image_data_generator.flow_from_dataframe(
             dataframe=data_frame,
             x_col=self.file_path_column_name,
@@ -195,6 +203,7 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
             suffle=True,
             subset='validation'
         )
+        self.validation_generator = validation_generator
 
         result = self.model.fit(
             train_generator,
@@ -218,6 +227,7 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
             class_mode=None,
             target_size=(self.input_shape[0], self.input_shape[1]),
         )
+        self.test_generator = test_generator
         return self.model.predict(test_generator)
     
     def predict_from_dataframe(self, features: pd.DataFrame):
@@ -237,7 +247,7 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         test_image = test_image.convert('RGB')
         image_array = np.array(test_image, dtype='float64') / 255.0
         image_array = np.expand_dims(image_array, axis=0)
-        return self.model.predict(image_array) 
+        return self.model.predict(image_array)
 
     def predict_from_pil_image(self, image: pillow_images.Image):
         labels_predicted_proba = self.predict_proba_from_pil_image(image)
