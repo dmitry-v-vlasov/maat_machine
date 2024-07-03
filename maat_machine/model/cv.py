@@ -1,8 +1,12 @@
 from types import NoneType
 from typing import Union
 
+import os
+import copy
 import pathlib as paths
 import zipfile
+import tempfile
+import joblib
 
 import json
 import pandas as pd
@@ -73,6 +77,26 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         self.train_generator = None
         self.validation_generator = None
         self.test_generator = None
+
+        self.class_indices = None
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+
+        if 'optimizer' in state:
+            del state['optimizer']
+        if 'model' in state:
+            del state['model']
+        if 'image_data_generator' in state:
+            del state['image_data_generator']
+        if 'train_generator' in state:
+            del state['train_generator']
+        if 'validation_generator' in state:
+            del state['validation_generator']
+        if 'test_generator' in state:
+            del state['test_generator']
+
+        return state
 
     def create_cnn_model(self):
         model = keras.Sequential()
@@ -210,6 +234,8 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
             epochs=self.epochs,
             validation_data=validation_generator,
         )
+
+        self.class_indices = self.train_generator.class_indices
         return result
 
     def predict_proba_from_dataframe(self, features: pd.DataFrame):
@@ -234,18 +260,18 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         labels_predicted_proba = self.predict_proba_from_dataframe(features)
         labels_predicted = np.argmax(labels_predicted_proba, axis=1)
 
-        label_dict = {v: k for k, v in self.train_generator.class_indices.items()}
+        label_dict = {v: k for k, v in self.class_indices.items()}
 
         labels_original_predicted = [label_dict[label] for label in labels_predicted]
         return labels_original_predicted
     
     def score_from_dataframe(self, features: pd.DataFrame, labels_true: pd.Series):
         labels_predicted = self.predict_from_dataframe(features)
-        np.array_equal
-        accuracy = np.mean(labels_predicted == labels_true) * 100
+        labels_true_array = np.array(labels_true)
+        accuracy = np.mean(labels_predicted == labels_true_array) * 100
         return accuracy
-    
-    def predict_proba_from_pil_image(self, image: pillow_images.Image) -> dict:
+
+    def predict_proba_from_pil_image_raw(self, image: pillow_images.Image):
         target_width = self.input_shape[1]
         target_height = self.input_shape[0]
         test_image = image.resize((target_width, target_height))
@@ -253,10 +279,13 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         image_array = np.array(test_image, dtype='float64') / 255.0
         image_array = np.expand_dims(image_array, axis=0)
         labels_predicted_proba = self.model.predict(image_array)
-        label_dict = {v: k for k, v in self.train_generator.class_indices.items()}
+        return labels_predicted_proba[0]
+    
+    def predict_proba_from_pil_image(self, image: pillow_images.Image) -> dict:
+        labels_predicted_proba = self.predict_proba_from_pil_image_raw(image)
+        label_dict = {v: k for k, v in self.class_indices.items()}
         predicted_labels_dict = {
-            label_dict[i]: probability \
-                for i, probability in enumerate(labels_predicted_proba)
+            label_dict[i]: probability for i, probability in enumerate(labels_predicted_proba)
         }
         return predicted_labels_dict
 
@@ -264,61 +293,96 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
         labels_predicted_proba = self.predict_proba_from_pil_image(image)
         predicted_label = max(labels_predicted_proba, key=labels_predicted_proba.get)
         return predicted_label
-
-    def save(self, directory_path: paths.Path):
-        assert directory_path is not None
-        assert directory_path.is_dir()
-
-        path_weights = directory_path / 'model.weights.h5'
-        self.model.save_weights(path_weights, overwrite=True, save_format='h5')
-
-        path_model = directory_path / 'model.tf'
-        self.model.save(path_model, overwrite=True, save_format='tf')
-
-        self_dictionary = vars(self).copy()
-        self_dictionary.pop('model', None)
-        self_dictionary.pop('optimizer', None)
-        serialized_wrapper_json = json.dumps(self_dictionary)
-
-        path_wrapper = directory_path / 'model.wrapper.json'
-        with open(path_wrapper, 'w') as f:
-            f.write(serialized_wrapper_json)
-
-        path_model_archive = directory_path / 'model.zip'
-        with zipfile.ZipFile(path_model_archive, 'w') as zip_reference:
-            zip_reference.write(directory_path / 'model.tf', 'model.tf')
-            zip_reference.write(directory_path / 'model.weights.h5', 'model.weights.h5')
-            zip_reference.write(directory_path / 'model.wrapper.json', 'model.wrapper.json')
+    
+    def get_history(self):
+        if self.model:
+            return copy.deepcopy(self.model.history.history)
+        else:
+            return None
 
     @staticmethod
-    def load(model_archive_path: paths.Path, extaction_directory_path: paths.Path):
-        assert model_archive_path is not None
-        assert model_archive_path.is_file()
-        assert model_archive_path.suffix == '.zip'
-        assert extaction_directory_path is not None
-        assert extaction_directory_path.is_dir()
+    def save(instance, directory_path, file_name: str = 'model.zip'):
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Save the Keras model
+            model_path = os.path.join(tmpdir, "model.keras")
+            instance.model.save(model_path, overwrite=True, include_optimizer=False)
 
-        archive_files = {
-            'weights': 'model.weights.h5',
-            'model': 'model.tf',
-            'wrapper': 'model.wrapper.json',
-        }
+            # Save the wrapper class instance
+            wrapper_path = os.path.join(tmpdir, "model.wrapper.joblib")
+            joblib.dump(instance, wrapper_path)
 
-        path_model_archive = extaction_directory_path / 'model.zip'
-        with zipfile.ZipFile(path_model_archive, 'r') as zip_reference:
-            for item_name, archive_file_name in archive_files.items():
-                assert archive_file_name in zip_reference.namelist()
+            # Create a zip file
+            with zipfile.ZipFile(f"{directory_path}/{file_name}", 'w') as zipf:
+                zipf.write(model_path, arcname="model.keras")
+                zipf.write(wrapper_path, arcname="model.wrapper.joblib")
 
-        with zipfile.ZipFile(path_model_archive, 'r') as zip_reference:
-            zip_reference.extractall(extaction_directory_path)
+    @staticmethod
+    def load(directory_path, file_name: str = 'model.zip'):
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Extract the zip file
+            with zipfile.ZipFile(f"{directory_path}/{file_name}", 'r') as zipf:
+                zipf.extractall(tmpdir)
 
-        model = mktf.load_model(extaction_directory_path / archive_files['model'])
-        model.load_weights(extaction_directory_path / archive_files['weights'])
+            # Load the Keras model
+            model_path = os.path.join(tmpdir, "model.keras")
+            model = keras.models.load_model(model_path)
 
-        with open(extaction_directory_path / archive_files['wrapper'], 'r') as f:
-            wrapper_dict = json.load(f)
+            # Load the wrapper class instance
+            wrapper_path = os.path.join(tmpdir, "model.wrapper.joblib")
+            wrapper = joblib.load(wrapper_path)
 
-        wrapper = CNNCustomClassifier(**wrapper_dict)
-        wrapper.model = model
-        return wrapper
+            # Update the model in the loaded instance
+            wrapper.model = model
+            return wrapper
 
+    @staticmethod
+    def save_lightweight(instance, directory_path, file_name: str = 'model_lightweight.zip'):
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Save the Keras model
+            model_json = instance.model.to_json()
+            model_path = os.path.join(tmpdir, "model.json")
+            with open(str(model_path), 'w') as json_file:
+                json_file.write(model_json)
+            
+            # Save the model weights
+            model_weights_path = os.path.join(tmpdir, "model.weights.h5")
+            instance.model.save_weights(model_weights_path)
+
+            # Save the wrapper class instance
+            wrapper_path = os.path.join(tmpdir, "model.wrapper.joblib")
+            joblib.dump(instance, wrapper_path)
+
+            # Create a zip file
+            with zipfile.ZipFile(f"{directory_path}/{file_name}", 'w') as zipf:
+                zipf.write(model_path, arcname="model.json")
+                zipf.write(model_weights_path, arcname="model.weights.h5")
+                zipf.write(wrapper_path, arcname="model.wrapper.joblib")
+    
+    @staticmethod
+    def load_lightweight(directory_path, file_name: str = 'model_lightweight.zip'):
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Extract the zip file
+            with zipfile.ZipFile(f"{directory_path}/{file_name}", 'r') as zipf:
+                zipf.extractall(tmpdir)
+
+            # Load the Keras model
+            model_path = os.path.join(tmpdir, "model.json")
+            with open(str(model_path), 'r') as json_file:
+                model_json = json_file.read()
+            model = mktf.model_from_json(model_json)
+
+            # Load the model weights
+            model_weights_path = os.path.join(tmpdir, "model.weights.h5")
+            model.load_weights(model_weights_path)
+
+            # Load the wrapper class instance
+            wrapper_path = os.path.join(tmpdir, "model.wrapper.joblib")
+            wrapper = joblib.load(wrapper_path)
+
+            # Update the model in the loaded instance
+            wrapper.model = model
+            return wrapper
