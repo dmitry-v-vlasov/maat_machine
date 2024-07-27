@@ -17,9 +17,15 @@ import scipy as sp
 
 import maat_machine.pprint as mpprn
 
+
+def package_version():
+    return '0.1.1b22'
+
+
 def print_system_info():
     os_name = platform.system()
     os_version = platform.release()
+    print(f"Maat Machine version: {package_version()}")
     print(f"Python version: {sys.version}")
     print(f"Version info: {sys.version_info}")
     print(f"Platform: {os_name} - {os_version}")
@@ -29,6 +35,7 @@ def print_system_info():
 def display_system_info():
     os_name = platform.system()
     os_version = platform.release()
+    mpprn.displayitwell(f"<hr>💎&nbsp;Maat Machine version:<br>&emsp;&emsp;&emsp;&emsp;{package_version()}", color='navy', font_weight='bold', inline=False)
     mpprn.displayitwell(f"<hr>🐍&nbsp;Python version:<br>&emsp;&emsp;&emsp;&emsp;{sys.version}", color='darkorange', font_weight='bold', inline=False)
     mpprn.displayitwell(f"🍃&nbsp;Version info:<br>&emsp;&emsp;&emsp;&emsp;{sys.version_info}", color='darkblue', font_weight='bold', inline=False)
     mpprn.displayitwell(f"💻&nbsp;Platform:<br>&emsp;&emsp;&emsp;&emsp;{os_name} - {os_version}", color='darkred', font_weight='bold', inline=False)

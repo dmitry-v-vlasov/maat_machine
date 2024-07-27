@@ -920,7 +920,7 @@ python-versions = ">=3.6"
 [metadata]
 lock-version = "1.1"
 python-versions = "3.11.9"
-content-hash = "f5e5624a89179deaef15430f0bdcd407fd5c9ddf1d1e0cf662c4ee3713095c54"
+content-hash = "adda353e792ecbce797ca015d5d59af8bc8035f575a2ac29c3ce5076c1ece3e5"
 
 [metadata.files]
 absl-py = [
