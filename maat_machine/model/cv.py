@@ -338,6 +338,21 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
             return wrapper
 
     @staticmethod
+    def load_unpacked(directory_path):
+        # Load the Keras model
+        model_path = os.path.join(directory_path, "model.keras")
+        model = keras.models.load_model(model_path)
+
+        # Load the wrapper class instance
+        wrapper_path = os.path.join(directory_path, "model.wrapper.joblib")
+        wrapper = joblib.load(wrapper_path)
+
+        # Update the model in the loaded instance
+        wrapper.model = model
+        return wrapper
+
+
+    @staticmethod
     def save_lightweight(instance, directory_path, file_name: str = 'model_lightweight.zip'):
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as tmpdir:
