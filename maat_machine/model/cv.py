@@ -107,7 +107,8 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
 
         if len(self.conv_layer_array) == 1:
             conv_layer_config = self.conv_layer_array[0]
-            if 'vgg16' in conv_layer_config:
+            conv_filters_i, conv_kernel_i, layers_i = conv_layer_config
+            if 'vgg16' in layers_i:
                 vgg16_base = appktf.VGG16(weights='imagenet', include_top=False, input_tensor=inputs)
                 for layer in vgg16_base.layers:
                     layer.trainable = False
