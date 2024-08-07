@@ -20,6 +20,7 @@ from keras import optimizers as oktf
 from keras import preprocessing as ppktf
 from keras import utils as uktf
 from keras import losses as lsktf
+from keras import applications as appktf
 import tensorflow.keras.preprocessing.image as tkpi
 import sklearn.base as sk_base
 import sklearn.model_selection as sk_modsel
@@ -100,46 +101,56 @@ class CNNCustomClassifier(sk_base.BaseEstimator, sk_base.ClassifierMixin):
 
     def create_cnn_model(self):
         model = keras.Sequential()
-        model.add(lktf.Input(shape=self.input_shape, name='input'))
 
-        for i, conv_layer_config in list(enumerate(self.conv_layer_array)):
-            conv_filters_i, conv_kernel_i, layers_i = conv_layer_config
-            assert 'c' in layers_i
-#             if i == 0:
-#                 model.add(lktf.Conv2D(filters=conv_filters_i, kernel_size=(1, 1), padding='same'))
+        inputs = lktf.Input(shape=self.input_shape, name='input')
+        model.add(inputs)
 
-            print(f"Conv Layer config: {conv_layer_config}")
+        if len(self.conv_layer_array) == 1:
+            conv_layer_config = self.conv_layer_array[0]
+            if 'vgg16' in conv_layer_config:
+                vgg16_base = appktf.VGG16(weights='imagenet', include_top=False, input_tensor=inputs)
+                for layer in vgg16_base.layers:
+                    layer.trainable = False
+                model.add(vgg16_base)
+        else:
+            for i, conv_layer_config in list(enumerate(self.conv_layer_array)):
+                conv_filters_i, conv_kernel_i, layers_i = conv_layer_config
+                assert 'c' in layers_i
+    #             if i == 0:
+    #                 model.add(lktf.Conv2D(filters=conv_filters_i, kernel_size=(1, 1), padding='same'))
 
-            model.add(lktf.Conv2D(
-                filters=conv_filters_i, kernel_size=conv_kernel_i,
-                padding='same',
-#                 kernel_regularizer=regularizers.L2(1e-3),
-#                 activity_regularizer=regularizers.L2(1e-3),
-                name=f"conv2d-{i}_0"
-            ))
-#             if 'b' in layers_i:
-#                 model.add(lktf.BatchNormalization(name=f"batch-{i}_0"))
-            model.add(lktf.ReLU(name=f"relu-{i}_0"))
-            conv2d_count = layers_i.count('c')
-            if conv2d_count > 1:
-                for c_i in range(0, conv2d_count-1):
-                    model.add(lktf.Conv2D(
-                        filters=conv_filters_i, kernel_size=conv_kernel_i,
-                        padding='same',
-        #                 kernel_regularizer=regularizers.L2(1e-3),
-        #                 activity_regularizer=regularizers.L2(1e-3),
-                        name=f"conv2d-{i}_{c_i+1}"
-                    ))
-#                     if 'b' in layers_i:
-#                         model.add(lktf.BatchNormalization(name=f"batch-{i}_{c_i+1}"))
-                    model.add(lktf.ReLU(name=f"relu-{i}_{c_i+1}"))
-        #             model.add(self._obtain_activation(self.conv_activation, self.conv_activation_parameter))
-            if 'b' in layers_i:
-                model.add(lktf.BatchNormalization(name=f"batch-{i}"))
-            if 'p' in layers_i:
-                model.add(lktf.MaxPooling2D(pool_size=self.conv_pool_size, padding='same', name=f"max_pooling_2d-{i}"))
-            if 'd' in layers_i:
-                model.add(lktf.Dropout(self.conv_dropout, name=f"dropout-{i}"))
+                print(f"Conv Layer config: {conv_layer_config}")
+
+                model.add(lktf.Conv2D(
+                    filters=conv_filters_i, kernel_size=conv_kernel_i,
+                    padding='same',
+    #                 kernel_regularizer=regularizers.L2(1e-3),
+    #                 activity_regularizer=regularizers.L2(1e-3),
+                    name=f"conv2d-{i}_0"
+                ))
+    #             if 'b' in layers_i:
+    #                 model.add(lktf.BatchNormalization(name=f"batch-{i}_0"))
+                model.add(lktf.ReLU(name=f"relu-{i}_0"))
+                conv2d_count = layers_i.count('c')
+                if conv2d_count > 1:
+                    for c_i in range(0, conv2d_count-1):
+                        model.add(lktf.Conv2D(
+                            filters=conv_filters_i, kernel_size=conv_kernel_i,
+                            padding='same',
+            #                 kernel_regularizer=regularizers.L2(1e-3),
+            #                 activity_regularizer=regularizers.L2(1e-3),
+                            name=f"conv2d-{i}_{c_i+1}"
+                        ))
+    #                     if 'b' in layers_i:
+    #                         model.add(lktf.BatchNormalization(name=f"batch-{i}_{c_i+1}"))
+                        model.add(lktf.ReLU(name=f"relu-{i}_{c_i+1}"))
+            #             model.add(self._obtain_activation(self.conv_activation, self.conv_activation_parameter))
+                if 'b' in layers_i:
+                    model.add(lktf.BatchNormalization(name=f"batch-{i}"))
+                if 'p' in layers_i:
+                    model.add(lktf.MaxPooling2D(pool_size=self.conv_pool_size, padding='same', name=f"max_pooling_2d-{i}"))
+                if 'd' in layers_i:
+                    model.add(lktf.Dropout(self.conv_dropout, name=f"dropout-{i}"))
 
         model.add(lktf.Flatten(name='flatten'))
 
